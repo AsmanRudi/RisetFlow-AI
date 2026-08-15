@@ -1,0 +1,1 @@
+Analisis project RisetFlow AI. Jangan mengubah, membuat, atau menghapus file apa pun. Periksa struktur frontend, backend, Gemini, navigasi, UI/UX, dan performa. Berikan hanya masalah yang ditemukan dan prioritas perbaikannya.

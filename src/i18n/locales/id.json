@@ -1,0 +1,29 @@
+{
+  "common": {
+    "welcome": "Selamat datang di RisetFlow",
+    "create": "✨ Buat",
+    "loading": "Memuat...",
+    "error": "Terjadi masalah.",
+    "retry": "Coba Lagi"
+  },
+  "nav": {
+    "home": "Beranda",
+    "workspace": "Ruang Kerja",
+    "ai": "Asisten AI",
+    "library": "Perpustakaan Saya",
+    "profile": "Profil"
+  },
+  "onboarding": {
+    "title1": "Semua pekerjaanmu dalam satu tempat",
+    "desc1": "Catatan, dokumen, tugas, penelitian, dan project.",
+    "title2": "AI yang memahami pekerjaanmu",
+    "desc2": "Gunakan AI berdasarkan dokumen dan knowledge milikmu.",
+    "title3": "Belajar lebih cerdas",
+    "desc3": "Ubah materi menjadi rangkuman, quiz, dan flashcard.",
+    "title4": "Riset tanpa kehilangan konteks",
+    "desc4": "Kelola paper, literature review, citation, dan research project.",
+    "title5": "Siap memulai?",
+    "desc5": "Bangun workspace AI milikmu.",
+    "start": "Mulai Sekarang"
+  }
+}

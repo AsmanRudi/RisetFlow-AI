@@ -1,0 +1,29 @@
+{
+  "common": {
+    "welcome": "Welcome to RisetFlow",
+    "create": "✨ Create",
+    "loading": "Loading...",
+    "error": "Something went wrong.",
+    "retry": "Try Again"
+  },
+  "nav": {
+    "home": "Home",
+    "workspace": "Workspace",
+    "ai": "AI Assistant",
+    "library": "My Library",
+    "profile": "Profile"
+  },
+  "onboarding": {
+    "title1": "All your work in one place",
+    "desc1": "Notes, documents, tasks, research, and projects.",
+    "title2": "AI that understands your work",
+    "desc2": "Use AI based on your documents and knowledge.",
+    "title3": "Learn smarter",
+    "desc3": "Turn materials into summaries, quizzes, and flashcards.",
+    "title4": "Research without losing context",
+    "desc4": "Manage papers, literature reviews, citations, and research projects.",
+    "title5": "Ready to start?",
+    "desc5": "Build your AI workspace.",
+    "start": "Start Now"
+  }
+}
