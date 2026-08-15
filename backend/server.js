@@ -7,10 +7,23 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { GoogleGenAI } = require('@google/genai');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'risetflow_super_secret_key_2026';
+
+const verifyToken = (token) => {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return require('./db').userRepo.getById(decoded.id);
+  } catch(e) {
+    return null;
+  }
+};
+
 const { 
   documentRepo, userRepo, chatRepo, taskRepo, noteRepo, projectRepo,
   documentChunkRepo, researchProjectRepo, researchMatrixRepo, 
-  studySessionRepo, flashcardRepo, vectorRepo
+  studySessionRepo, flashcardRepo, vectorRepo, transactionRepo, alertRepo
 } = require('./db');
 
 const app = express();
@@ -95,6 +108,19 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/documents/upload', upload.single('document'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded or invalid file type.' });
+
+    const user = userRepo.getAll().find(u => u.id === req.body.userId);
+    if (!user) return res.status(401).json({ error: 'User not found' });
+
+    // Paywall Check
+    const tier = user.subscriptionTier || 'free';
+    const userDocs = documentRepo.getAll().filter(d => d.userId === user.id);
+    if (tier === 'free' && userDocs.length >= 3) {
+      return res.status(403).json({ error: 'Free tier hanya dapat mengunggah maksimal 3 dokumen. Silakan upgrade ke Basic atau Pro.' });
+    }
+    if (tier === 'basic' && userDocs.length >= 10) {
+      return res.status(403).json({ error: 'Basic tier hanya dapat mengunggah maksimal 10 dokumen. Silakan upgrade ke Pro.' });
+    }
 
     const docId = uuidv4();
     const filePath = req.file.path;
@@ -248,27 +274,46 @@ app.post('/api/documents/:id/chat', async (req, res) => {
 // AUTHENTICATION ENDPOINTS
 // ==========================================
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Lengkapi semua field' });
   
   const existingUser = userRepo.getAll().find(u => u.email === email);
   if (existingUser) return res.status(400).json({ error: 'Email sudah terdaftar' });
 
-  // Dummy password hashing for beta
-  const token = "dummy-jwt-" + uuidv4();
-  const user = userRepo.create({ name, email, password, token });
+  const hashedPwd = await bcrypt.hash(password, 10);
+  const id = uuidv4();
+  const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: '7d' });
+  
+  const user = userRepo.create({ 
+    id, name, email, password: hashedPwd, token, 
+    subscriptionTier: 'free', 
+    isAdmin: false 
+  });
   
   const { password: _, ...safeUser } = user;
   res.json({ user: safeUser, token });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = userRepo.getAll().find(u => u.email === email && u.password === password);
+  const user = userRepo.getAll().find(u => u.email === email);
   if (!user) return res.status(401).json({ error: 'Email atau kata sandi salah' });
 
-  const token = "dummy-jwt-" + uuidv4();
+  let isMatch = false;
+  if (user.password.startsWith('$2b$') || user.password.startsWith('$2a$')) {
+    isMatch = await bcrypt.compare(password, user.password);
+  } else {
+    isMatch = (user.password === password);
+    if (isMatch) {
+       const hashed = await bcrypt.hash(password, 10);
+       userRepo.update(user.id, { password: hashed });
+    }
+  }
+
+  if (!isMatch) return res.status(401).json({ error: 'Email atau kata sandi salah' });
+
+  const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
   userRepo.update(user.id, { token });
   
   const { password: _, ...safeUser } = userRepo.getById(user.id);
@@ -284,18 +329,18 @@ app.get('/api/auth/me', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  const user = userRepo.getAll().find(u => u.token === token);
+  const user = verifyToken(token);
   if (!user) return res.status(401).json({ error: 'Invalid token' });
 
   const { password: _, ...safeUser } = user;
   res.json({ user: safeUser });
 });
 
-app.put('/api/auth/profile', (req, res) => {
+app.put('/api/auth/profile', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  let user = userRepo.getAll().find(u => u.token === token);
+  let user = verifyToken(token);
   if (!user) return res.status(401).json({ error: 'Invalid token' });
 
   const { name, avatar, email, role, username, birthdate, address, institution, password } = req.body;
@@ -308,7 +353,7 @@ app.put('/api/auth/profile', (req, res) => {
   if (birthdate !== undefined) updates.birthdate = birthdate;
   if (address !== undefined) updates.address = address;
   if (institution !== undefined) updates.institution = institution;
-  if (password) updates.password = password;
+  if (password) updates.password = await bcrypt.hash(password, 10);
 
   user = userRepo.update(user.id, updates);
   
@@ -317,7 +362,176 @@ app.put('/api/auth/profile', (req, res) => {
 });
 
 // ==========================================
-// CRUD ENDPOINTS (Generic Builder)
+// SUPER ADMIN ENDPOINTS
+// ==========================================
+
+const requireAdmin = (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  const user = verifyToken(token);
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Forbidden: Admin access required' });
+  
+  req.adminUser = user;
+  next();
+};
+
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  const users = userRepo.getAll().map(u => {
+    const { password, token, ...safeUser } = u;
+    return safeUser;
+  });
+  res.json(users);
+});
+
+app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const user = userRepo.getById(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const { subscriptionTier, isAdmin } = req.body;
+  const updates = {};
+  if (subscriptionTier !== undefined) updates.subscriptionTier = subscriptionTier;
+  if (isAdmin !== undefined) updates.isAdmin = isAdmin;
+
+  const updatedUser = userRepo.update(user.id, updates);
+  const { password, token, ...safeUser } = updatedUser;
+  res.json(safeUser);
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  if (req.params.id === req.adminUser.id) {
+    return res.status(400).json({ error: 'Cannot delete yourself' });
+  }
+  const success = userRepo.delete(req.params.id);
+  if (!success) return res.status(404).json({ error: 'User not found' });
+  res.json({ success: true });
+});
+
+  // ==========================================
+  // TRANSACTIONS ENDPOINTS
+
+  app.post('/api/transactions/upgrade', (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    const user = verifyToken(token);
+    if (!user) return res.status(401).json({ error: 'Invalid token' });
+
+    const { tier } = req.body;
+    
+    // Check if there is already a pending transaction
+    const existing = transactionRepo.getAll().find(t => t.userId === user.id && t.status === 'pending');
+    if (existing) return res.status(400).json({ error: 'Anda sudah memiliki permintaan upgrade yang sedang diproses.' });
+
+    const trx = transactionRepo.create({
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      tier: tier || 'pro',
+      status: 'pending'
+    });
+
+    res.json(trx);
+  });
+
+  app.get('/api/transactions/my-pending', (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    const user = verifyToken(token);
+    if (!user) return res.status(401).json({ error: 'Invalid token' });
+
+    const pending = transactionRepo.getAll().find(t => t.userId === user.id && t.status === 'pending');
+    res.json({ pending: pending || null });
+  });
+
+  app.get('/api/admin/transactions', requireAdmin, (req, res) => {
+    const trxs = transactionRepo.getAll();
+    res.json(trxs);
+  });
+
+  app.post('/api/admin/transactions/:id/approve', requireAdmin, (req, res) => {
+    const trx = transactionRepo.getById(req.params.id);
+    if (!trx) return res.status(404).json({ error: 'Transaction not found' });
+    if (trx.status !== 'pending') return res.status(400).json({ error: 'Transaction is not pending' });
+
+    transactionRepo.update(trx.id, { status: 'approved' });
+    
+    const user = userRepo.getById(trx.userId);
+    if (user) {
+      userRepo.update(user.id, { subscriptionTier: trx.tier });
+    }
+
+    res.json({ success: true, transaction: transactionRepo.getById(trx.id) });
+  });
+
+  app.post('/api/admin/transactions/:id/reject', requireAdmin, (req, res) => {
+    const trx = transactionRepo.getById(req.params.id);
+    if (!trx) return res.status(404).json({ error: 'Transaction not found' });
+    if (trx.status !== 'pending') return res.status(400).json({ error: 'Transaction is not pending' });
+
+    transactionRepo.update(trx.id, { status: 'rejected' });
+    res.json({ success: true, transaction: transactionRepo.getById(trx.id) });
+  });
+
+  // ==========================================
+  // ALERTS ENDPOINTS
+
+  app.post('/api/admin/alerts', requireAdmin, (req, res) => {
+    const { userId, message } = req.body;
+    if (!userId || !message) return res.status(400).json({ error: 'userId and message required' });
+    
+    const user = userRepo.getById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const alert = alertRepo.create({
+      userId,
+      userEmail: user.email,
+      userName: user.name,
+      message,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes
+    });
+
+    res.json(alert);
+  });
+
+  app.get('/api/admin/alerts', requireAdmin, (req, res) => {
+    const alerts = alertRepo.getAll().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json(alerts);
+  });
+
+  app.put('/api/admin/alerts/:id', requireAdmin, (req, res) => {
+    const { message } = req.body;
+    const alert = alertRepo.getById(req.params.id);
+    if (!alert) return res.status(404).json({ error: 'Alert not found' });
+    
+    // reset expiry when edited so they can see it for another 5 mins
+    const updated = alertRepo.update(alert.id, { 
+      message,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+    });
+    res.json(updated);
+  });
+
+  app.delete('/api/admin/alerts/:id', requireAdmin, (req, res) => {
+    const success = alertRepo.delete(req.params.id);
+    if (!success) return res.status(404).json({ error: 'Alert not found' });
+    res.json({ success: true });
+  });
+
+  app.get('/api/alerts/my-active', (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    const user = verifyToken(token);
+    if (!user) return res.status(401).json({ error: 'Invalid token' });
+
+    const now = new Date();
+    // Get latest active alert for user
+    const activeAlert = alertRepo.getAll().find(a => a.userId === user.id && new Date(a.expiresAt) > now);
+    
+    res.json({ alert: activeAlert || null });
+  });
+
+  // ==========================================
+  // CRUD ENDPOINTS (Generic Builder)
 // ==========================================
 const createCrudEndpoints = (resourceName, repo) => {
   const basePath = `/api/${resourceName}`;

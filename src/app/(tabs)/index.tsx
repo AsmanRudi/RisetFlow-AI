@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { StyleSheet, SafeAreaView, ScrollView, View, Dimensions } from 'react-native';
 import { HomeHeader } from '@/features/home/components/HomeHeader';
 import { AIHeroCard } from '@/features/home/components/AIHeroCard';
+import { ProBanner } from '@/features/home/components/ProBanner';
 import { QuickActions } from '@/features/home/components/QuickActions';
 import { TodayFocusMetrics } from '@/features/home/components/TodayFocusMetrics';
 import { RecentActivities } from '@/features/home/components/RecentActivities';
@@ -56,6 +57,7 @@ export default function HomeTab() {
       <HomeHeader />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <AIHeroCard />
+        <ProBanner />
         <QuickActions />
         
         <TodayFocusMetrics isLoading={isLoading} metrics={data?.metrics || []} />

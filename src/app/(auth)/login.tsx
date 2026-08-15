@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
+import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,8 +46,8 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
       {/* Decorative Background Blobs */}
-      <View style={[styles.blob1, { backgroundColor: COLORS.primary + '30' }]} />
-      <View style={[styles.blob2, { backgroundColor: COLORS.secondary + '20' }]} />
+      <Animated.View entering={FadeIn.duration(1000)} style={[styles.blob1, { backgroundColor: COLORS.primary + '30' }]} />
+      <Animated.View entering={FadeIn.duration(1200)} style={[styles.blob2, { backgroundColor: COLORS.secondary + '20' }]} />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
         <View style={styles.header}>
@@ -56,16 +57,18 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.content}>
-          <View style={styles.titleContainer}>
-            <Typography variant="h1" weight="bold" style={styles.title}>Welcome Back</Typography>
+          <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.titleContainer}>
+            <Typography variant="h1" weight="bold" style={styles.title}>Selamat Datang</Typography>
             <View style={styles.dot} />
-          </View>
-          <Typography variant="body" color={isDark ? '#94a3b8' : '#64748b'} style={styles.subtitle}>
-            Enter your details to access your RisetFlow workspace.
-          </Typography>
+          </Animated.View>
+          <Animated.View entering={FadeInDown.delay(300).springify()}>
+            <Typography variant="body" color={isDark ? '#94a3b8' : '#64748b'} style={styles.subtitle}>
+              Masuk untuk melanjutkan ke ruang kerja cerdas Anda.
+            </Typography>
+          </Animated.View>
 
-          <View style={[styles.formContainer, { backgroundColor: isDark ? '#1e293bE6' : '#ffffffE6' }]}>
-            <Input 
+          <Animated.View entering={FadeInDown.delay(500).springify()} style={[styles.formContainer, { backgroundColor: isDark ? '#1e293bE6' : '#ffffffE6' }]}>
+            <Input  
               placeholder="Email address" 
               value={email}
               onChangeText={setEmail}
@@ -89,16 +92,16 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <Button variant="primary" style={styles.btn} onPress={handleLogin} disabled={isLoading}>
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? 'Masuk...' : 'Masuk'}
             </Button>
-          </View>
+          </Animated.View>
 
-          <View style={styles.footer}>
-            <Typography variant="caption" color={isDark ? '#94a3b8' : '#64748b'}>Don&apos;t have an account? </Typography>
+          <Animated.View entering={FadeInUp.delay(800).springify()} style={styles.footer}>
+            <Typography variant="caption" color={isDark ? '#94a3b8' : '#64748b'}>Belum punya akun? </Typography>
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-              <Typography variant="caption" weight="bold" color={COLORS.primary}>Sign Up</Typography>
+              <Typography variant="caption" weight="bold" color={COLORS.primary}>Daftar</Typography>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

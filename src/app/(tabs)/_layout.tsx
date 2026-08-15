@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, FolderKanban, Sparkles, Library, User, Edit3, CheckSquare, Upload } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
@@ -8,6 +8,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { FAB, FABAction } from '@/components/ui/FAB';
 import * as DocumentPicker from 'expo-document-picker';
 import { useLibraryStore } from '@/store/useLibraryStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { Typography } from '@/components/ui/Typography';
+import { Bell } from 'lucide-react-native';
 
 export default function TabsLayout() {
   const router = useRouter();
@@ -15,9 +18,42 @@ export default function TabsLayout() {
   const isDark = theme === 'dark';
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
 
-// ... Inside TabsLayout ...
+  React.useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace('/(auth)/onboarding');
+    }
+  }, [isAuthenticated]);
+
   const uploadDocument = useLibraryStore(state => state.uploadDocument);
+  const [activeAlert, setActiveAlert] = React.useState<any>(null);
+  const token = useAuthStore(state => state.token);
+  const fetchMe = useAuthStore(state => state.fetchMe);
+  const BACKEND_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
+  React.useEffect(() => {
+    fetchMe();
+  }, []);
+
+  React.useEffect(() => {
+    let interval: any;
+    const fetchAlert = async () => {
+      if (!token) return;
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/alerts/my-active`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActiveAlert(data.alert);
+        }
+      } catch(e) {}
+    };
+    fetchAlert();
+    interval = setInterval(fetchAlert, 15000); // Check every 15 seconds
+    return () => clearInterval(interval);
+  }, [token]);
 
   const handleDocumentPick = async () => {
     try {
@@ -146,6 +182,15 @@ export default function TabsLayout() {
         />
       </Tabs>
       {fabActions && <FAB actions={fabActions} />}
+      {activeAlert && (
+        <View style={styles.alertBanner}>
+          <Bell size={20} color="#FFF" style={{ marginRight: 8 }} />
+          <View style={{ flex: 1 }}>
+            <Typography variant="caption" weight="bold" color="#FFF">Pesan dari Super Admin</Typography>
+            <Typography variant="body" color="#FFF">{activeAlert.message}</Typography>
+          </View>
+        </View>
+      )}
     </>
   );
 }
@@ -160,5 +205,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8
+  },
+  alertBanner: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: COLORS.danger,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    zIndex: 9999
   }
 });

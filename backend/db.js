@@ -17,7 +17,9 @@ const defaultDB = {
   researchMatrices: [],
   studySessions: [],
   flashcards: [],
-  vectors: []
+  vectors: [],
+  transactions: [],
+  alerts: []
 };
 
 if (!fs.existsSync(dbPath)) {
@@ -116,6 +118,8 @@ const studySessionRepo = createRepo('studySessions');
 const flashcardRepo = createRepo('flashcards');
 const vectorRepo = createRepo('vectors');
 const chatRepo = createRepo('chats');
+const transactionRepo = createRepo('transactions');
+const alertRepo = createRepo('alerts');
 
 module.exports = { 
   documentRepo,
@@ -129,5 +133,7 @@ module.exports = {
   researchMatrixRepo,
   studySessionRepo,
   flashcardRepo,
-  vectorRepo
+  vectorRepo,
+  transactionRepo,
+  alertRepo
 };

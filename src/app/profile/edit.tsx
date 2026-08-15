@@ -4,7 +4,7 @@ import { Typography } from '@/components/ui/Typography';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { User, Mail, Lock, Calendar as CalendarIcon, MapPin, Building2, Camera, Search, X, Briefcase } from 'lucide-react-native';
+import { User, Mail, Lock, Calendar as CalendarIcon, MapPin, Building2, Camera, Search, X, Briefcase, Shield } from 'lucide-react-native';
 import { SPACING, COLORS } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -12,9 +12,19 @@ import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Custom AutoComplete Modal Component
-const AutocompleteModal = ({ visible, onClose, onSelect, title, fetchSuggestions, placeholder, isDark }) => {
+interface AutocompleteModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (val: string) => void;
+  title: string;
+  fetchSuggestions: (q: string) => Promise<{label: string}[]>;
+  placeholder: string;
+  isDark: boolean;
+}
+
+const AutocompleteModal = ({ visible, onClose, onSelect, title, fetchSuggestions, placeholder, isDark }: AutocompleteModalProps) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<{label: string}[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -87,7 +97,11 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const theme = useAppStore(state => state.theme);
   const isDark = theme === 'dark';
-  const { user, updateProfile } = useAuthStore();
+  const { user, updateProfile, fetchMe } = useAuthStore();
+
+  useEffect(() => {
+    fetchMe();
+  }, []);
 
   const [name, setName] = useState(user?.name || '');
   const [username, setUsername] = useState(user?.username || '');
@@ -136,10 +150,17 @@ export default function EditProfileScreen() {
 
   const handlePickAvatar = async () => {
     try {
-      const { getDocumentAsync } = await import('expo-document-picker');
-      const result = await getDocumentAsync({ type: 'image/*' });
+      const ImagePicker = await import('expo-image-picker');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAvatar(result.assets[0].uri);
+        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        setAvatar(base64Image);
       }
     } catch(e) { 
       alert('Gagal membuka galeri'); 
@@ -287,6 +308,7 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={{ height: SPACING.xl }} />
+
           <Button title="Simpan Perubahan" onPress={handleSave} disabled={loading || !name} />
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -325,7 +347,7 @@ export default function EditProfileScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity 
                   style={[styles.resultItem, { borderBottomColor: isDark ? COLORS.darkBorder : COLORS.border }]}
-                  onPress={() => { setRole(item.value); setShowRoleModal(false); }}
+                  onPress={() => { setRole(item.value as any); setShowRoleModal(false); }}
                 >
                   <Typography weight={role === item.value ? 'bold' : 'normal'} color={role === item.value ? COLORS.primary : (isDark ? '#FFF' : '#000')}>
                     {item.label}
@@ -351,5 +373,8 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: SPACING.lg, height: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-  resultItem: { paddingVertical: SPACING.md, borderBottomWidth: 1 }
+  resultItem: { paddingVertical: SPACING.md, borderBottomWidth: 1 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: SPACING.md },
+  inputIcon: { marginRight: SPACING.sm },
+  flexInput: { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }
 });

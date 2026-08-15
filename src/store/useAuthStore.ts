@@ -17,6 +17,8 @@ interface UserProfile {
   address?: string;
   institution?: string;
   avatar?: string;
+  subscriptionTier?: 'free' | 'basic' | 'pro';
+  isAdmin?: boolean;
 }
 
 interface AuthState {
@@ -30,6 +32,7 @@ interface AuthState {
   logout: () => void;
   updateRole: (role: UserRole) => void;
   updateProfile: (data: Partial<UserProfile> & { password?: string }) => Promise<void>;
+  fetchMe: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -100,6 +103,25 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (e) {
           console.error('Update profile failed', e);
+        }
+      },
+
+      fetchMe: async () => {
+        const { token } = get();
+        if (!token) return;
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            set({ user: data.user });
+          } else if (res.status === 401 || res.status === 403) {
+            // Auto logout if token is invalid/expired
+            get().logout();
+          }
+        } catch (e) {
+          console.error('Fetch me failed', e);
         }
       },
     }),

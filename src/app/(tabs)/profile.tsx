@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal, Image, Platform } from 'react-native';
 import { Typography } from '@/components/ui/Typography';
 import { Button } from '@/components/ui/Button';
 import { SPACING, COLORS } from '@/constants/theme';
@@ -19,6 +19,46 @@ export default function ProfileTab() {
   const [showSettings, setShowSettings] = useState(false);
   const [showPro, setShowPro] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  
+  const [isPending, setIsPending] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
+  const BACKEND_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
+  useEffect(() => {
+    if (showPro) {
+      // Check if pending
+      fetch(`${BACKEND_URL}/api/transactions/my-pending`, {
+        headers: { 'Authorization': `Bearer ${useAuthStore.getState().token}` }
+      }).then(r => r.json()).then(data => {
+        if (data.pending) setIsPending(true);
+      }).catch(e => console.error(e));
+    }
+  }, [showPro]);
+
+  const handleUpgrade = async () => {
+    setIsPaying(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/transactions/upgrade`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${useAuthStore.getState().token}`
+        },
+        body: JSON.stringify({ tier: 'pro' })
+      });
+      if (res.ok) {
+        setIsPending(true);
+        alert('Bukti pembayaran terkirim! Mohon tunggu konfirmasi Admin.');
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Gagal mengirim konfirmasi');
+      }
+    } catch (e) {
+      alert('Terjadi kesalahan jaringan');
+    } finally {
+      setIsPaying(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -27,7 +67,8 @@ export default function ProfileTab() {
 
   const menuItems = [
     { icon: Settings, label: 'Pengaturan Tampilan & Bahasa', onPress: () => setShowSettings(true) },
-    { icon: Crown, label: 'RisetFlow Pro', onPress: () => setShowPro(true) },
+    ...(!user?.isAdmin ? [{ icon: Crown, label: 'RisetFlow Pro', onPress: () => setShowPro(true) }] : []),
+    ...(user?.isAdmin ? [{ icon: Shield, label: 'Super Admin Panel', onPress: () => router.push('/admin' as any) }] : []),
     { icon: Shield, label: 'Privasi & Keamanan', onPress: () => router.push('/profile/privacy' as any) },
     { icon: HelpCircle, label: 'Bantuan & Dukungan', onPress: () => router.push('/profile/support' as any) },
   ];
@@ -134,10 +175,29 @@ export default function ProfileTab() {
               <Typography variant="body" color={COLORS.textSecondary} align="center" style={{ marginBottom: SPACING.xl }}>
                 Dapatkan akses tanpa batas ke Model AI terbaru, penyimpanan dokumen cloud, dan analitik riset.
               </Typography>
-              <Button variant="primary" style={{ width: '100%' }} onPress={() => {
-                alert('Pembayaran berhasil! Selamat datang di RisetFlow PRO 🎉');
-                setShowPro(false);
-              }}>Upgrade Sekarang - Rp49.000/bln</Button>
+              
+              {isPending ? (
+                <View style={{ width: '100%', padding: SPACING.lg, backgroundColor: COLORS.warning + '20', borderRadius: 12, alignItems: 'center' }}>
+                  <Typography weight="bold" color={COLORS.warning}>Menunggu Konfirmasi Admin</Typography>
+                  <Typography variant="caption" align="center" color={COLORS.textSecondary} style={{ marginTop: SPACING.sm }}>
+                    Permintaan Anda sedang diproses. Status akun Anda akan berubah otomatis setelah Admin memverifikasi pembayaran Anda.
+                  </Typography>
+                </View>
+              ) : (
+                <>
+                  <View style={{ width: '100%', padding: SPACING.lg, backgroundColor: isDark ? COLORS.darkSurface : COLORS.surface, borderRadius: 12, marginBottom: SPACING.xl, borderWidth: 1, borderColor: isDark ? COLORS.darkBorder : COLORS.border }}>
+                    <Typography variant="caption" color={COLORS.textSecondary}>Transfer ke:</Typography>
+                    <Typography weight="bold" style={{ fontSize: 18, marginTop: 4 }}>BCA 1234567890</Typography>
+                    <Typography variant="caption">a/n RisetFlow AI</Typography>
+                    <Typography variant="caption" color={COLORS.textSecondary} style={{ marginTop: SPACING.md }}>Total:</Typography>
+                    <Typography weight="bold" color={COLORS.primary} style={{ fontSize: 24 }}>Rp 49.000</Typography>
+                  </View>
+
+                  <Button variant="primary" style={{ width: '100%' }} onPress={handleUpgrade} disabled={isPaying}>
+                    {isPaying ? "Memproses..." : "Konfirmasi Sudah Bayar"}
+                  </Button>
+                </>
+              )}
            </View>
         </SafeAreaView>
       </Modal>
